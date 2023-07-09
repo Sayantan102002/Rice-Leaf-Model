@@ -3,6 +3,7 @@
 Created on Fri May 12 01:44:01 2023
 
 @author: Sayantan Chakraborty
+
 """
 
 from sklearn.metrics import confusion_matrix
@@ -16,35 +17,44 @@ import cv2
 import os
 import seaborn as sns
 import pandas as pd
-from skimage.filters import sobel, laplace
+from skimage.filters import sobel, laplace, gaussian, meijering
 from sklearn.model_selection import train_test_split
+from rembg import remove
+from datetime import datetime
 
 print(os.listdir("Diseases/"))
 print(os.listdir("Nutrition_Defeciency/"))
 SIZE = 256
 
 
-# print("TRAIN IMAGES")
 images = []
 labels = []
 train_images = []
 train_labels = []
 test_images = []
 test_labels = []
-# print(glob.glob("Diseases/*"))
+
+
+# Global Variables for storing data in excel
+n_est = 300
+accuracy = 0
+models = []
+# -------------------------------------------
+
 
 for path in glob.glob("Nutrition_Defeciency/*"):
     label = path.split("\\")[-1]
     print(label)
-    for i in range(0, 100):
-    # for img_path in glob.glob(os.path.join(path, "*.jpg")):
+    for i in range(0, 5):
+        # for img_path in glob.glob(os.path.join(path, "*.jpg")):
         img_path = glob.glob(os.path.join(path, "*.jpg"))[i]
         print(img_path)
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
         img = cv2.resize(img, (SIZE, SIZE))
         images.append(img)
         labels.append(label)
-        
+
+
 for path in glob.glob("Diseases/*"):
     label = path.split("\\")[-1]
     print(label)
@@ -54,15 +64,13 @@ for path in glob.glob("Diseases/*"):
         img = cv2.resize(img, (SIZE, SIZE))
         images.append(img)
         labels.append(label)
-        
+
 images = np.array(images)
 labels = np.array(labels)
 
 
-
 train_images, test_images, train_labels, test_labels = train_test_split(
     images, labels, test_size=0.25, random_state=42)
-
 
 
 le = preprocessing.LabelEncoder()
@@ -86,12 +94,8 @@ def feature_extractor(dataset):
     for image in range(x_train.shape[0]):
         input_img = x_train[image, :, :, :]
         img = input_img
-        # print(input_img)
 
         df = pd.DataFrame()
-        # pixel_values = img.reshape(-1)
-        # df['Pixel_Value'] = pixel_values  # Pixel value itself as a feature
-        # df['Image_Name'] = image   #Capture image name as we read multiple images
 
         # FEATURE 1 - Bunch of Gabor filter responses
 
@@ -115,21 +119,31 @@ def feature_extractor(dataset):
                 filtered_img = fimg.reshape(-1)
                 # Labels columns as Gabor1, Gabor2, etc.
                 df[gabor_label] = filtered_img
-                # print(gabor_label, ': theta=', theta, ': sigma=',
-                #       sigma, ': lamda=', lamda, ': gamma=', gamma)
                 num += 1  # Increment for gabor column label
-                
-                
+        models.append("Gabor")
         # FEATURE 2 - Sobel filter
-        
+
         edge_sobel = sobel(img)
         edge_sobel1 = edge_sobel.reshape(-1)
         df['Sobel'] = edge_sobel1
-        
+        models.append("Sobel")
+
         # FEATURE 3 - Laplace filter
         edge_laplace = laplace(img)
         edge_laplace1 = edge_laplace.reshape(-1)
         df['Laplace'] = edge_laplace1
+        models.append("Laplace")
+
+        # FEATURE 4 - Gaussian filter
+        # edge_gaussian = gaussian(
+        #     img, sigma=1, mode='reflect', channel_axis=False)
+        # edge_gaussian1 = edge_gaussian.reshape(-1)
+        # df['Gaussian'] = edge_gaussian1
+
+        # FEATURE 5 - Meijering Filter
+        # edge_meijering = meijering(img)
+        # edge_meijering1 = edge_meijering.reshape(-1)
+        # df['Meijering'] = edge_meijering1
 
         # edge_otsu = threshold_otsu(img)
         # edge_otsu1 = edge_otsu.reshape(-1)
@@ -139,25 +153,14 @@ def feature_extractor(dataset):
     return image_dataset
 
 
-# print(feature_extractor(x_train))
-
 image_features = feature_extractor(x_train)
-
-# Reshape to a vector for Random Forest / SVM training
 n_features = image_features.shape[1]
 image_features = np.expand_dims(image_features, axis=0)
 # Reshape to #images, features
 X_for_RF = np.reshape(image_features, (x_train.shape[0], -1))
 
 # Define the classifier
-# from sklearn.neighbors import KNeighborsClassifier
-RF_model = RandomForestClassifier(n_estimators=50, random_state=42)
-
-# Can also use SVM but RF is faster and may be more accurate.
-# from sklearn import svm
-# SVM_model = svm.SVC(decision_function_shape='ovo')  #For multiclass classification
-# SVM_model.fit(X_for_RF, y_train)
-
+RF_model = RandomForestClassifier(n_estimators=n_est, random_state=42)
 
 # Fit the model on training data
 RF_model.fit(X_for_RF, y_train)  # For sklearn no one hot encoding
@@ -174,7 +177,8 @@ test_prediction = RF_model.predict(test_for_RF)
 test_prediction = le.inverse_transform(test_prediction)
 
 # Print overall accuracy
-print("Accuracy = ", metrics.accuracy_score(test_labels, test_prediction))
+accuracy = metrics.accuracy_score(test_labels, test_prediction)
+print("Accuracy = ", accuracy)
 
 # Print confusion matrix
 cm = confusion_matrix(test_labels, test_prediction)
@@ -184,24 +188,54 @@ sns.set(font_scale=1.6)
 sns.heatmap(cm, annot=True, ax=ax)
 
 
+"""
+    Function to update details in excel file "Rice Leaf Model.xlsx"
+"""
+
+
+def writeData():
+    # new dataframe with same columns
+    df = pd.DataFrame({'Classifier': ['RF'],
+                       'N_Estimators': [n_est],
+                       'Sample Size': [x_train.shape[0]],
+                       'Accuracy': [accuracy],
+                       'Models': [set(models)],
+                       'Date and Time': [datetime.now()]
+                       })
+
+    # read  file content
+    reader = pd.read_excel('Rice Leaf Model.xlsx')
+
+    # create writer object
+    # used engine='openpyxl' because append operation is not supported by xlsxwriter
+    writer = pd.ExcelWriter('Rice Leaf Model.xlsx', engine='openpyxl',
+                            mode='a', if_sheet_exists="overlay")
+
+    # append new dataframe to the excel sheet
+    df.style.set_properties(**{'text-align': 'center'}).to_excel(
+        writer, index=False, header=False, startrow=len(reader) + 1)
+
+    # close file
+    writer.close()
+
+
+writeData()
+
 # Extract features and reshape to right dimensions
 # Expand dims so the input is (num images, x, y, c)
-c = 1
-for img in x_test:
+# for img in x_test:
 
-    input_img = np.expand_dims(img, axis=0)
-    input_img_features = feature_extractor(input_img)
-    input_img_features = np.expand_dims(input_img_features, axis=0)
-    input_img_for_RF = np.reshape(input_img_features, (input_img.shape[0], -1))
-    # Predict
-    img_prediction = RF_model.predict(input_img_for_RF)
-    # Reverse the label encoder to original name
-    img_prediction = le.inverse_transform(img_prediction)
-    print("The prediction for this image is: ", img_prediction)
-    # rows, cols = (x_test.shape[0]//4)+1,4
-    # plt.subplot(rows, cols, c)
-    # plt.imshow(img)
-    # plt.title(f'{img_prediction}')
-    c+=1
-
-
+#     input_img = np.expand_dims(img, axis=0)
+#     input_img_features = feature_extractor(input_img)
+#     input_img_features = np.expand_dims(input_img_features, axis=0)
+#     input_img_for_RF = np.reshape(input_img_features, (input_img.shape[0], -1))
+#     # Predict
+#     img_prediction = RF_model.predict(input_img_for_RF)
+#     # Reverse the label encoder to original name
+#     img_prediction = le.inverse_transform(img_prediction)
+#     print("The prediction for this image is: ", img_prediction)
+#     # rows, cols = (x_test.shape[0]//4)+1,4
+#     # plt.subplot(rows, cols, c)
+#     # plt.imshow(img)
+#     # plt.title(f'{img_prediction}')
+#     c+=1
