@@ -36,7 +36,7 @@ test_labels = []
 
 
 # Global Variables for storing data in excel
-n_est = 300
+n_est = 100
 accuracy = 0
 models = []
 # -------------------------------------------
@@ -47,18 +47,36 @@ for path in glob.glob("Nutrition_Defeciency/*"):
     print(label)
     for i in range(0, 5):
         # for img_path in glob.glob(os.path.join(path, "*.jpg")):
-        img_path = glob.glob(os.path.join(path, "*.jpg"))[i]
+        img_path = glob.glob(os.path.join(path, "*.JPG"))[i]
         print(img_path)
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
         img = cv2.resize(img, (SIZE, SIZE))
         images.append(img)
         labels.append(label)
 
+    for img_path in glob.glob(os.path.join(path, "*.jpg")):
+        print(img_path)
+        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        img = cv2.resize(img, (SIZE, SIZE))
+        images.append(img)
+        images.append(label)
+
 
 for path in glob.glob("Diseases/*"):
     label = path.split("\\")[-1]
     print(label)
     for img_path in glob.glob(os.path.join(path, "*.jpg")):
+        print(img_path)
+        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        img = cv2.resize(img, (SIZE, SIZE))
+        images.append(img)
+        labels.append(label)
+
+for path in glob.glob("Diseases/*"):
+    label = path.split("\\")[-1]
+    print(label)
+    # For images ending with JPG
+    for img_path in glob.glob(os.path.join(path, "*.JPG")):
         print(img_path)
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
         img = cv2.resize(img, (SIZE, SIZE))
@@ -202,21 +220,27 @@ def writeData():
                        'Models': [set(models)],
                        'Date and Time': [datetime.now()]
                        })
+    try:
+        reader = pd.read_excel('Rice Leaf Model.xlsx')
+        # read  file content
+        print(reader)
+        # create writer object
+        # used engine='openpyxl' because append operation is not supported by xlsxwriter
+        writer = pd.ExcelWriter('Rice Leaf Model.xlsx', engine='openpyxl',
+                                mode='a', if_sheet_exists="overlay")
 
-    # read  file content
-    reader = pd.read_excel('Rice Leaf Model.xlsx')
+        # append new dataframe to the excel sheet
+        df.style.set_properties(**{'text-align': 'center'}).to_excel(
+            writer, index=False, header=False, startrow=len(reader) + 1)
+        # close file
+        writer.close()
+    except FileNotFoundError:
+        writer = pd.ExcelWriter('Rice Leaf Model.xlsx', engine='xlsxwriter')
+        df.style.set_properties(
+            **{'text-align': 'center'}).to_excel(writer, index=False)
 
-    # create writer object
-    # used engine='openpyxl' because append operation is not supported by xlsxwriter
-    writer = pd.ExcelWriter('Rice Leaf Model.xlsx', engine='openpyxl',
-                            mode='a', if_sheet_exists="overlay")
-
-    # append new dataframe to the excel sheet
-    df.style.set_properties(**{'text-align': 'center'}).to_excel(
-        writer, index=False, header=False, startrow=len(reader) + 1)
-
-    # close file
-    writer.close()
+        # close file
+        writer.close()
 
 
 writeData()
