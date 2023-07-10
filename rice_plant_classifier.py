@@ -39,6 +39,9 @@ test_labels = []
 n_est = 100
 accuracy = 0
 models = []
+precision_score = 0
+recall_score = 0
+f1_score = 0
 # -------------------------------------------
 
 
@@ -54,12 +57,12 @@ for path in glob.glob("Nutrition_Defeciency/*"):
         images.append(img)
         labels.append(label)
 
-    for img_path in glob.glob(os.path.join(path, "*.jpg")):
-        print(img_path)
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-        img = cv2.resize(img, (SIZE, SIZE))
-        images.append(img)
-        images.append(label)
+    # for img_path in glob.glob(os.path.join(path, "*.jpg")):
+    #     print(img_path)
+    #     img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+    #     img = cv2.resize(img, (SIZE, SIZE))
+    #     images.append(img)
+    #     images.append(label)
 
 
 for path in glob.glob("Diseases/*"):
@@ -72,16 +75,16 @@ for path in glob.glob("Diseases/*"):
         images.append(img)
         labels.append(label)
 
-for path in glob.glob("Diseases/*"):
-    label = path.split("\\")[-1]
-    print(label)
-    # For images ending with JPG
-    for img_path in glob.glob(os.path.join(path, "*.JPG")):
-        print(img_path)
-        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-        img = cv2.resize(img, (SIZE, SIZE))
-        images.append(img)
-        labels.append(label)
+# for path in glob.glob("Diseases/*"):
+#     label = path.split("\\")[-1]
+#     print(label)
+#     # For images ending with JPG
+#     for img_path in glob.glob(os.path.join(path, "*.JPG")):
+#         print(img_path)
+#         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+#         img = cv2.resize(img, (SIZE, SIZE))
+#         images.append(img)
+#         labels.append(label)
 
 images = np.array(images)
 labels = np.array(labels)
@@ -196,7 +199,15 @@ test_prediction = le.inverse_transform(test_prediction)
 
 # Print overall accuracy
 accuracy = metrics.accuracy_score(test_labels, test_prediction)
+precision_score = metrics.precision_score(
+    test_labels, test_prediction, average='micro')
+recall_score = metrics.recall_score(
+    test_labels, test_prediction, average='micro')
+f1_score = metrics.f1_score(test_labels, test_prediction, average='micro')
 print("Accuracy = ", accuracy)
+print("Precision Score = ", precision_score)
+print("Recall Score = ", recall_score)
+print("F1 Score = ", f1_score)
 
 # Print confusion matrix
 cm = confusion_matrix(test_labels, test_prediction)
@@ -217,13 +228,16 @@ def writeData():
                        'N_Estimators': [n_est],
                        'Sample Size': [x_train.shape[0]],
                        'Accuracy': [accuracy],
+                       'Precision Score': [precision_score],
+                       'Recall Score': [recall_score],
+                       'F1 Score': [f1_score],
                        'Models': [set(models)],
                        'Date and Time': [datetime.now()]
                        })
     try:
         reader = pd.read_excel('Rice Leaf Model.xlsx')
         # read  file content
-        print(reader)
+        # print(reader)
         # create writer object
         # used engine='openpyxl' because append operation is not supported by xlsxwriter
         writer = pd.ExcelWriter('Rice Leaf Model.xlsx', engine='openpyxl',
